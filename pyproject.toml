@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lumi-collaborative-filtering"
+version = "0.1.0"
+description = "Collaborative Filtering service (item-item) for Lumi website"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Lumi" }]
+dependencies = []
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
