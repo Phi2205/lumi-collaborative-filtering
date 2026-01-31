@@ -1,3 +1,5 @@
+"""Pydantic schemas for API requests/responses."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -42,4 +44,3 @@ class RecommendUsersResponse(BaseModel):
     recommendations: list[UserScore]
     strategy: str = "neighbors_2hop_weighted"
     generated_at: datetime
-

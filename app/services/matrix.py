@@ -7,7 +7,7 @@ import numpy as np
 from scipy.sparse import csr_matrix
 from sklearn.metrics.pairwise import cosine_similarity
 
-from lumi_cf.services.preprocess import PairScore
+from app.services.preprocess import PairScore
 
 
 @dataclass(frozen=True)

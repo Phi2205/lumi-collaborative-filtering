@@ -1,8 +1,10 @@
+"""Scoring functions for event types."""
+
 from __future__ import annotations
 
 from math import log1p
 
-from lumi_cf.core.constants import EVENT_WEIGHTS, cap_for_event
+from app.services.constants import EVENT_WEIGHTS, cap_for_event
 
 
 def event_score_from_count(event_type: str, count: int) -> float:
@@ -18,4 +20,3 @@ def event_score_from_count(event_type: str, count: int) -> float:
         return 0.0
     c = min(int(count), cap_for_event(et))
     return float(w * log1p(c))
-

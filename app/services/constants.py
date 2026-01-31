@@ -1,4 +1,6 @@
-ALLOWED_EVENT_TYPES = {"like", "comment", "share", "message", "view"}
+"""Constants for event types and weights."""
+
+ALLOWED_EVENT_TYPES = {"like", "comment", "share", "message", "view_post", "view_profile"}
 
 # Baseline implicit weights (tune later)
 EVENT_WEIGHTS: dict[str, float] = {
@@ -6,7 +8,8 @@ EVENT_WEIGHTS: dict[str, float] = {
     "comment": 2.0,
     "share": 1.5,
     "like": 1.0,
-    "view": 0.1,
+    "view_profile": 1.0,
+    "view_post": 0.1
 }
 
 
@@ -19,7 +22,8 @@ def cap_for_event(event_type: str) -> int:
     """
     if event_type == "message":
         return 20
-    if event_type == "view":
-        return 50
+    if event_type == "view_profile":
+        return 10  # Quan tâm sâu, không nên spam quá nhiều
+    if event_type == "view_post":
+        return 50  # Lướt newsfeed nhiều
     return 300
-

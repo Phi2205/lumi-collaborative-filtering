@@ -8,9 +8,9 @@ from typing import Dict, Iterable, Tuple
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from lumi_cf.core.time import days_ago, half_life_decay, utcnow
-from lumi_cf.models import UserInteractionEvent
-from lumi_cf.services.scoring import event_score_from_count
+from app.services.time_utils import days_ago, half_life_decay, utcnow
+from app.models import UserInteractionEvent
+from app.services.scoring import event_score_from_count
 
 
 @dataclass(frozen=True)

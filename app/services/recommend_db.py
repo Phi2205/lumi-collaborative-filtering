@@ -6,9 +6,9 @@ from datetime import datetime, timedelta
 from sqlalchemy import distinct, func, select
 from sqlalchemy.orm import Session
 
-from lumi_cf.core.time import days_ago, half_life_decay, utcnow
-from lumi_cf.models import UserInteractionEvent
-from lumi_cf.services.scoring import event_score_from_count
+from app.models.models import UserInteractionEvent
+from app.services.scoring import event_score_from_count
+from app.services.time_utils import days_ago, half_life_decay, utcnow
 
 
 @dataclass(frozen=True)
@@ -130,4 +130,57 @@ def recommend_users_neighbors_2hop_weighted(
     top = sorted(scores.items(), key=lambda x: x[1], reverse=True)[:k]
     recs = [UserScoreRow(user_id=uid, score=sc, reason="neighbors_2hop_weighted") for uid, sc in top]
     return recs, generated_at
+
+
+def recommend_popular_users(
+    db: Session,
+    *,
+    exclude_user_ids: set[int],
+    k: int,
+    window_days: int,
+    half_life_days: float | None = None,
+) -> tuple[list[UserScoreRow], datetime]:
+    """
+    Fallback / cold-start:
+    - tính độ "popular" của từng target_user_id trong window_days gần nhất
+    - có thể dùng khi user không có đủ neighbors hoặc similarity quá thấp
+    """
+    if half_life_days is None:
+        half_life_days = float(window_days)
+
+    cutoff = utcnow() - timedelta(days=window_days)
+
+    # Aggregate theo (target_user_id, event_type), kèm thời điểm gần nhất để time-decay
+    q = (
+        select(
+            UserInteractionEvent.target_user_id,
+            UserInteractionEvent.event_type,
+            func.count().label("cnt"),
+            func.max(UserInteractionEvent.occurred_at).label("last_occurred_at"),
+        )
+        .where(UserInteractionEvent.occurred_at >= cutoff)
+        .group_by(UserInteractionEvent.target_user_id, UserInteractionEvent.event_type)
+    )
+
+    now = utcnow()
+    scores: Dict[int, float] = {}
+
+    for target_id, event_type, cnt, last_occurred_at in db.execute(q).all():
+        target = int(target_id)
+        if target in exclude_user_ids:
+            continue
+
+        et = str(event_type).strip().lower()
+        base = event_score_from_count(et, int(cnt))
+        if base <= 0:
+            continue
+
+        d = days_ago(last_occurred_at, ref=now) if last_occurred_at is not None else 0.0
+        decay = half_life_decay(d, half_life_days=half_life_days)
+
+        scores[target] = scores.get(target, 0.0) + base * decay
+
+    top = sorted(scores.items(), key=lambda x: x[1], reverse=True)[:k]
+    recs = [UserScoreRow(user_id=uid, score=sc, reason="popular_fallback") for uid, sc in top]
+    return recs, now
 

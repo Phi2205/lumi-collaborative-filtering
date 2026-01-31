@@ -1,3 +1,5 @@
+"""Time utilities for decay calculations."""
+
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
@@ -37,4 +39,3 @@ def half_life_decay(days: float, half_life_days: float = 30.0) -> float:
     if half_life_days <= 0 or days <= 0:
         return 1.0
     return pow(2.0, -(days / half_life_days))
-

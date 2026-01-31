@@ -1,3 +1,5 @@
+"""SQLAlchemy ORM models."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -6,7 +8,7 @@ from typing import Any, Optional
 from sqlalchemy import DateTime, Float, Index, Integer, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column
 
-from lumi_cf.db import Base
+from app.utils.database import Base
 
 
 class UserInteractionEvent(Base):
@@ -34,4 +36,3 @@ class UserInteractionEvent(Base):
         Index("idx_uie_pair_time", "actor_user_id", "target_user_id", "occurred_at"),
         Index("idx_uie_type_time", "event_type", "occurred_at"),
     )
-

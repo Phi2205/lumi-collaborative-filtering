@@ -1,3 +1,5 @@
+"""Ingest interaction events into database."""
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -6,9 +8,9 @@ from typing import Any, Optional
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from lumi_cf.core.constants import ALLOWED_EVENT_TYPES
-from lumi_cf.core.time import utcnow
-from lumi_cf.models import UserInteractionEvent
+from app.models.models import UserInteractionEvent
+from app.services.constants import ALLOWED_EVENT_TYPES
+from app.services.time_utils import utcnow
 
 
 def ingest_event(
@@ -50,4 +52,3 @@ def ingest_event(
     db.commit()
     db.refresh(row)
     return int(row.id)
-
