@@ -6,8 +6,15 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, verify_internal_key
-from app.models import RecommendUsersResponse, SimilarUsersResponse, UserScore
+from app.models import (
+    PostScore,
+    RecommendPostsResponse,
+    RecommendUsersResponse,
+    SimilarUsersResponse,
+    UserScore,
+)
 from app.utils.config import settings
+from app.services.post_candidates import generate_post_candidates
 from app.services.recommend_db import (
     get_similar_users_shared_targets,
     recommend_popular_users,
@@ -80,4 +87,59 @@ def recommend_users(
         window_days=window_days,
         recommendations=[UserScore(user_id=r.user_id, score=r.score, reason=r.reason) for r in recs],
         generated_at=generated_at,
+    )
+
+
+@router.get("/recommend-posts/{user_id}", response_model=RecommendPostsResponse)
+def recommend_posts(
+    user_id: int,
+    k: int = 100,
+    window_days: int = 30,
+    strategy: str = "multi_source",
+    db: Session = Depends(get_db),
+) -> RecommendPostsResponse:
+    """
+    Đề xuất posts cho user_id để hiển thị trên feed/trang chủ.
+    
+    Strategies:
+    - "multi_source": Kết hợp tất cả nguồn (social, CF, trending, content-based, exploration)
+    - "social_only": Chỉ posts từ social graph (friends/following)
+    - "cf_only": Chỉ collaborative filtering
+    - "trending_only": Chỉ trending posts
+    """
+    if k < 1:
+        raise HTTPException(status_code=400, detail="k must be >= 1")
+    k = min(k, 500)  # Max 500 posts
+    if window_days < 1 or window_days > 365:
+        raise HTTPException(status_code=400, detail="window_days must be in [1, 365]")
+    if strategy not in ("multi_source", "social_only", "cf_only", "trending_only"):
+        raise HTTPException(
+            status_code=400,
+            detail='strategy must be one of: "multi_source", "social_only", "cf_only", "trending_only"',
+        )
+    
+    from app.services.time_utils import utcnow
+    
+    candidates = generate_post_candidates(
+        db,
+        user_id=user_id,
+        k=k,
+        window_days=window_days,
+        strategy=strategy,
+    )
+    
+    return RecommendPostsResponse(
+        user_id=user_id,
+        window_days=window_days,
+        candidates=[
+            PostScore(
+                post_id=c.post_id,
+                score=c.score,
+                reason=c.reason,
+                source=c.source,
+            )
+            for c in candidates
+        ],
+        strategy=strategy,
+        generated_at=utcnow(),
     )
