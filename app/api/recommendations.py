@@ -74,9 +74,18 @@ def recommend_users(
     )
     # Fallback: nếu CF không tìm được candidate, dùng popular users
     if not recs:
+        from sqlalchemy import select
+        from app.models.models import Friend
+        # Lấy danh sách bạn bè để loại bỏ khỏi cả kết quả fallback
+        friends_q = select(Friend.friend_id).where(Friend.user_id == user_id)
+        friends_rev_q = select(Friend.user_id).where(Friend.friend_id == user_id)
+        exclude_ids = {user_id}
+        exclude_ids.update({int(r[0]) for r in db.execute(friends_q).all()})
+        exclude_ids.update({int(r[0]) for r in db.execute(friends_rev_q).all()})
+
         fallback_recs, generated_at = recommend_popular_users(
             db,
-            exclude_user_ids={user_id},
+            exclude_user_ids=exclude_ids,
             k=k,
             window_days=window_days,
         )
