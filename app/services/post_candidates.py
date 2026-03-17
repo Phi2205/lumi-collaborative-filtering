@@ -118,7 +118,7 @@ def get_cf_posts(
     
     # 1. Tìm similar users (neighbors)
     user_targets_sq = (
-        select(distinct(UserInteractionEvent.target_user_id))
+        select(distinct(UserInteractionEvent.target_user_id).label("target_user_id"))
         .where(
             UserInteractionEvent.actor_user_id == user_id,
             UserInteractionEvent.occurred_at >= cutoff,
@@ -290,7 +290,7 @@ def get_content_based_posts(
     # Lấy posts user đã engage để tìm authors
     user_posts_q = (
         select(
-            distinct(UserInteractionEvent.content_id),
+            distinct(UserInteractionEvent.content_id).label("content_id"),
             Post.user_id.label("author_id"),
         )
         .join(Post, UserInteractionEvent.content_id == Post.id)
