@@ -142,6 +142,7 @@ def get_cf_posts(
     )
     
     neighbors = db.execute(neighbors_q).all()
+    print("neighbors", neighbors)
     if not neighbors:
         return []
     

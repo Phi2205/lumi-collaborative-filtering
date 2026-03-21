@@ -306,6 +306,9 @@ def refresh_all_features(
     user_post_count = db.execute(select(func.count(UserPostEngagement.user_id))).scalar() or 0
     user_profile_count = db.execute(select(func.count(UserProfileFeatures.user_id))).scalar() or 0
 
+    print(f"User post engagement records: {user_post_count}")
+    print(f"User profile records: {user_profile_count}")
+
     return {
         "user_post_engagement_records": user_post_count,
         "user_profile_records": user_profile_count,

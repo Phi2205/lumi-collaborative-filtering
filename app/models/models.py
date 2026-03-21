@@ -212,7 +212,7 @@ class UserPostEngagement(Base):
     )
 
     # Metadata: breakdown theo event_type (JSON)
-    # Ví dụ: {"like": 5, "comment": 2, "share": 1}
+    # Ví dụ: {"like_post": 5, "comment_post": 2, "share_post": 1}
     event_breakdown: Mapped[dict[str, int]] = mapped_column(
         JSON, nullable=False, default=dict
     )
@@ -246,7 +246,7 @@ class UserProfileFeatures(Base):
     avg_engagement_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
 
     # Phân bố theo event_type (JSON)
-    # Ví dụ: {"like": 0.4, "comment": 0.3, "share": 0.2, "view_post": 0.1}
+    # Ví dụ: {"like_post": 0.4, "comment_post": 0.3, "share_post": 0.2, "view_post": 0.1}
     event_type_distribution: Mapped[dict[str, float]] = mapped_column(
         JSON, nullable=False, default=dict
     )
