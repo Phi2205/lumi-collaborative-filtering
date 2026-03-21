@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -103,6 +104,7 @@ def recommend_users(
 def recommend_posts(
     user_id: int,
     k: int = 100,
+    exclude_ids: Optional[str] = None,  # comma-separated IDs: "1,2,3"
     window_days: int = 30,
     strategy: str = "multi_source",
     db: Session = Depends(get_db),
@@ -129,9 +131,18 @@ def recommend_posts(
     
     from app.services.time_utils import utcnow
     
+    # Parse exclude_ids string to set of ints
+    exclude_set = None
+    if exclude_ids:
+        try:
+            exclude_set = {int(i.strip()) for i in exclude_ids.split(",") if i.strip()}
+        except ValueError:
+            raise HTTPException(status_code=400, detail="exclude_ids must be a comma-separated list of integers")
+
     candidates = generate_post_candidates(
         db,
         user_id=user_id,
+        exclude_post_ids=exclude_set,
         k=k,
         window_days=window_days,
         strategy=strategy,

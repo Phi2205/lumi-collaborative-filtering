@@ -11,7 +11,7 @@ from typing import Optional, Set
 from sqlalchemy import distinct, func, select
 from sqlalchemy.orm import Session
 
-from app.models.models import Post, UserInteractionEvent, UserPostEngagement
+from app.models.models import Friend, Post, UserInteractionEvent, UserPostEngagement
 from app.services.time_utils import days_ago, half_life_decay, utcnow
 
 
@@ -27,6 +27,7 @@ def get_social_graph_posts(
     db: Session,
     *,
     user_id: int,
+    exclude_post_ids: Optional[Set[int]] = None,
     following_user_ids: Optional[Set[int]] = None,
     k: int = 100,
     window_days: int = 7,
@@ -41,16 +42,14 @@ def get_social_graph_posts(
     """
     cutoff = utcnow() - timedelta(days=window_days)
     
-    # Nếu không có following_user_ids, lấy từ events (users user đã tương tác)
+    # Nếu không có following_user_ids, lấy từ danh sách bạn bè (Friends)
     if following_user_ids is None:
-        following_q = (
-            select(distinct(UserInteractionEvent.target_user_id))
-            .where(
-                UserInteractionEvent.actor_user_id == user_id,
-                UserInteractionEvent.occurred_at >= cutoff,
-            )
-        )
-        following_user_ids = {int(r[0]) for r in db.execute(following_q).all()}
+        # Lấy danh sách bạn bè (cả 2 chiều)
+        f1 = select(Friend.friend_id).where(Friend.user_id == user_id)
+        f2 = select(Friend.user_id).where(Friend.friend_id == user_id)
+        
+        following_user_ids = {int(r[0]) for r in db.execute(f1).all()}
+        following_user_ids.update({int(r[0]) for r in db.execute(f2).all()})
     
     if not following_user_ids:
         return []
@@ -68,9 +67,12 @@ def get_social_graph_posts(
             Post.created_at >= cutoff,
         )
         .group_by(Post.id, Post.created_at)
-        .order_by(Post.created_at.desc())
-        .limit(k)
     )
+
+    if exclude_post_ids:
+        q = q.where(Post.id.notin_(exclude_post_ids))
+
+    q = q.order_by(Post.created_at.desc()).limit(k)
     
     now = utcnow()
     candidates = []
@@ -102,6 +104,7 @@ def get_cf_posts(
     db: Session,
     *,
     user_id: int,
+    exclude_post_ids: Optional[Set[int]] = None,
     k: int = 100,
     window_days: int = 30,
     neighbor_k: int = 50,
@@ -161,6 +164,11 @@ def get_cf_posts(
     seen_post_ids = {int(r[0]) for r in db.execute(seen_posts_q).all()}
     
     # 3. Lấy posts từ neighbors với engagement_score cao
+    # Gộp list posts đã xem (seen_post_ids) và list ids cần loại từ (exclude_post_ids)
+    all_seen_ids = seen_post_ids.copy()
+    if exclude_post_ids:
+        all_seen_ids.update(exclude_post_ids)
+
     q = (
         select(
             UserPostEngagement.post_id,
@@ -169,7 +177,7 @@ def get_cf_posts(
         )
         .where(
             UserPostEngagement.user_id.in_(neighbor_ids),
-            UserPostEngagement.post_id.notin_(seen_post_ids) if seen_post_ids else True,
+            UserPostEngagement.post_id.notin_(all_seen_ids) if all_seen_ids else True,
         )
         .order_by(UserPostEngagement.engagement_score.desc())
         .limit(k * 2)  # Lấy nhiều hơn để aggregate
@@ -278,6 +286,7 @@ def get_content_based_posts(
     db: Session,
     *,
     user_id: int,
+    exclude_post_ids: Optional[Set[int]] = None,
     k: int = 50,
     window_days: int = 30,
 ) -> list[PostScoreRow]:
@@ -313,12 +322,17 @@ def get_content_based_posts(
     if not author_ids:
         return []
     
+    # Gộp IDs để loại trừ
+    all_exclude_ids = seen_post_ids.copy()
+    if exclude_post_ids:
+        all_exclude_ids.update(exclude_post_ids)
+
     # Lấy posts mới từ các authors này
     q = (
         select(Post.id, Post.created_at)
         .where(
             Post.user_id.in_(author_ids),
-            Post.id.notin_(seen_post_ids) if seen_post_ids else True,
+            Post.id.notin_(all_exclude_ids) if all_exclude_ids else True,
             Post.created_at >= cutoff,
         )
         .order_by(Post.created_at.desc())
@@ -406,6 +420,7 @@ def generate_post_candidates(
     db: Session,
     *,
     user_id: int,
+    exclude_post_ids: Optional[Set[int]] = None,
     k: int = 100,
     window_days: int = 30,
     following_user_ids: Optional[Set[int]] = None,
@@ -428,13 +443,15 @@ def generate_post_candidates(
         strategy: Strategy để generate candidates
     """
     all_candidates: list[PostScoreRow] = []
-    seen_post_ids: Set[int] = set()
+    # Khởi tạo seen_post_ids từ tham số loại trừ
+    seen_post_ids: Set[int] = set(exclude_post_ids) if exclude_post_ids else set()
     
     if strategy in ("multi_source", "social_only"):
         # Nguồn 1: Social graph (30% của k)
         social_posts = get_social_graph_posts(
             db,
             user_id=user_id,
+            exclude_post_ids=seen_post_ids,
             following_user_ids=following_user_ids,
             k=int(k * 0.3),
             window_days=min(window_days, 7),
@@ -447,6 +464,7 @@ def generate_post_candidates(
         cf_posts = get_cf_posts(
             db,
             user_id=user_id,
+            exclude_post_ids=seen_post_ids,
             k=int(k * 0.4),
             window_days=window_days,
             neighbor_k=50,
@@ -472,6 +490,7 @@ def generate_post_candidates(
         content_posts = get_content_based_posts(
             db,
             user_id=user_id,
+            exclude_post_ids=seen_post_ids,
             k=int(k * 0.05),
             window_days=window_days,
         )
