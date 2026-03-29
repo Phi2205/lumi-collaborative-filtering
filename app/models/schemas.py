@@ -59,3 +59,18 @@ class RecommendPostsResponse(BaseModel):
     candidates: list[PostScore]
     strategy: str = "multi_source"
     generated_at: datetime
+
+
+class ReelScore(BaseModel):
+    reel_id: int
+    score: float
+    reason: Optional[str] = None
+    source: Optional[str] = None
+
+
+class RecommendReelsResponse(BaseModel):
+    user_id: int
+    window_days: int
+    candidates: list[ReelScore]
+    strategy: str = "multi_source"
+    generated_at: datetime

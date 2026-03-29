@@ -70,6 +70,7 @@ class User(Base):
     posts: Mapped[list["Post"]] = relationship(back_populates="user")
     comments: Mapped[list["Comment"]] = relationship(back_populates="user")
     post_likes: Mapped[list["PostLike"]] = relationship(back_populates="user")
+    reels: Mapped[list["Reel"]] = relationship(back_populates="user")
 
 
 class Post(Base):
@@ -117,6 +118,47 @@ class Post(Base):
     __table_args__ = (
         Index("idx_posts_created_at", created_at.desc()),
         Index("idx_posts_user", "user_id"),
+    )
+
+
+class Reel(Base):
+    """ORM model for the `reels` table."""
+
+    __tablename__ = "reels"
+
+    id: Mapped[int] = mapped_column(
+        BigInteger, primary_key=True, autoincrement=True
+    )
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    video_url: Mapped[str] = mapped_column(String, nullable=False)
+    thumbnail_url: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    caption: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    music_name: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    duration: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
+    like_count: Mapped[int] = mapped_column(Integer, default=0)
+    comment_count: Mapped[int] = mapped_column(Integer, default=0)
+    share_count: Mapped[int] = mapped_column(Integer, default=0)
+    view_count: Mapped[int] = mapped_column(Integer, default=0)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=datetime.utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+    # Relationships
+    user: Mapped["User"] = relationship(back_populates="reels")
+
+    __table_args__ = (
+        Index("idx_reels_created_at", created_at.desc()),
+        Index("idx_reels_user", "user_id"),
     )
 
 
@@ -232,6 +274,45 @@ class UserPostEngagement(Base):
     )
 
 
+class UserReelEngagement(Base):
+    """Bảng aggregate engagement giữa user và reel (từ events)."""
+
+    __tablename__ = "user_reel_engagement"
+
+    user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, nullable=False)
+    reel_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, nullable=False)
+
+    # Engagement score với time-decay
+    engagement_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+
+    # Số lượng interactions
+    interaction_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    # Thời gian tương tác gần nhất
+    last_interaction_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    # Metadata: breakdown theo event_type (JSON)
+    event_breakdown: Mapped[dict[str, int]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
+
+    # Timestamp để track khi nào record được cập nhật
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+    __table_args__ = (
+        Index("idx_ure_user_score", "user_id", "engagement_score"),
+        Index("idx_ure_reel_score", "reel_id", "engagement_score"),
+        Index("idx_ure_last_interaction", "user_id", "last_interaction_at"),
+    )
+
+
 class UserProfileFeatures(Base):
     """Bảng features của user (tính từ lịch sử interactions)."""
 
@@ -264,6 +345,9 @@ class UserProfileFeatures(Base):
 
     # Số lượng post user đã tương tác (unique posts)
     unique_posts_interacted: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    # Số lượng reels user đã tương tác (unique reels)
+    unique_reels_interacted: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     # Số lượng users user đã tương tác (unique targets)
     unique_users_interacted: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
