@@ -128,7 +128,14 @@ def main() -> None:
         print("   Service will start but may fail on first request")
         print("   Bạn có muốn tiếp tục? (y/n): ", end="")
         try:
-            response = input().strip().lower()
+            # Tự động tiếp tục nếu chạy trên Render hoặc môi trường không phải interactive
+            is_render = os.getenv("RENDER", "false").lower() == "true" or not sys.stdin.isatty()
+            if is_render:
+                print("y (auto-continued on Render)")
+                response = 'y'
+            else:
+                response = input().strip().lower()
+                
             if response != 'y':
                 print("👋 Exiting...")
                 sys.exit(1)
@@ -165,11 +172,15 @@ def main() -> None:
     print()
     
     try:
+        # Lấy port từ biến môi trường (Render cấp port ngẫu nhiên qua $PORT)
+        port = int(os.getenv("PORT", 8000))
+        is_render = os.getenv("RENDER", "false").lower() == "true"
+        
         uvicorn.run(
             "app.utils.main:app",
             host="0.0.0.0",
-            port=8000,
-            reload=True,  # auto-reload khi code thay đổi (dev mode)
+            port=port,
+            reload=not is_render,  # Chỉ bật reload khi chạy local
             log_level="info",
             access_log=True,
         )
