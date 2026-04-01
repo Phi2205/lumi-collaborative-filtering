@@ -2,12 +2,23 @@
 
 from __future__ import annotations
 
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, verify_internal_key
-from app.models import RecommendUsersResponse, SimilarUsersResponse, UserScore
+from app.models import (
+    PostScore,
+    ReelScore,
+    RecommendPostsResponse,
+    RecommendReelsResponse,
+    RecommendUsersResponse,
+    SimilarUsersResponse,
+    UserScore,
+)
 from app.utils.config import settings
+from app.services.post_candidates import generate_post_candidates
+from app.services.reel_candidates import generate_reel_candidates
 from app.services.recommend_db import (
     get_similar_users_shared_targets,
     recommend_popular_users,
@@ -67,9 +78,18 @@ def recommend_users(
     )
     # Fallback: nếu CF không tìm được candidate, dùng popular users
     if not recs:
+        from sqlalchemy import select
+        from app.models.models import Friend
+        # Lấy danh sách bạn bè để loại bỏ khỏi cả kết quả fallback
+        friends_q = select(Friend.friend_id).where(Friend.user_id == user_id)
+        friends_rev_q = select(Friend.user_id).where(Friend.friend_id == user_id)
+        exclude_ids = {user_id}
+        exclude_ids.update({int(r[0]) for r in db.execute(friends_q).all()})
+        exclude_ids.update({int(r[0]) for r in db.execute(friends_rev_q).all()})
+
         fallback_recs, generated_at = recommend_popular_users(
             db,
-            exclude_user_ids={user_id},
+            exclude_user_ids=exclude_ids,
             k=k,
             window_days=window_days,
         )
@@ -80,4 +100,121 @@ def recommend_users(
         window_days=window_days,
         recommendations=[UserScore(user_id=r.user_id, score=r.score, reason=r.reason) for r in recs],
         generated_at=generated_at,
+    )
+
+
+@router.get("/recommend-posts/{user_id}", response_model=RecommendPostsResponse)
+def recommend_posts(
+    user_id: int,
+    k: int = 100,
+    exclude_ids: Optional[str] = None,  # comma-separated IDs: "1,2,3"
+    window_days: int = 30,
+    strategy: str = "multi_source",
+    db: Session = Depends(get_db),
+) -> RecommendPostsResponse:
+    """
+    Đề xuất posts cho user_id để hiển thị trên feed/trang chủ.
+    """
+    if k < 1:
+        raise HTTPException(status_code=400, detail="k must be >= 1")
+    k = min(k, 500)  # Max 500 posts
+    if window_days < 1 or window_days > 365:
+        raise HTTPException(status_code=400, detail="window_days must be in [1, 365]")
+    if strategy not in ("multi_source", "social_only", "cf_only", "trending_only"):
+        raise HTTPException(
+            status_code=400,
+            detail='strategy must be one of: "multi_source", "social_only", "cf_only", "trending_only"',
+        )
+    
+    from app.services.time_utils import utcnow
+    
+    # Parse exclude_ids string to set of ints
+    exclude_set = None
+    if exclude_ids:
+        try:
+            exclude_set = {int(i.strip()) for i in exclude_ids.split(",") if i.strip()}
+        except ValueError:
+            raise HTTPException(status_code=400, detail="exclude_ids must be a comma-separated list of integers")
+
+    candidates = generate_post_candidates(
+        db,
+        user_id=user_id,
+        exclude_post_ids=exclude_set,
+        k=k,
+        window_days=window_days,
+        strategy=strategy,
+    )
+    
+    return RecommendPostsResponse(
+        user_id=user_id,
+        window_days=window_days,
+        candidates=[
+            PostScore(
+                post_id=c.post_id,
+                score=c.score,
+                reason=c.reason,
+                source=c.source,
+            )
+            for c in candidates
+        ],
+        strategy=strategy,
+        generated_at=utcnow(),
+    )
+
+
+@router.get("/recommend-reels/{user_id}", response_model=RecommendReelsResponse)
+def recommend_reels(
+    user_id: int,
+    k: int = 100,
+    exclude_ids: Optional[str] = None,  # comma-separated IDs: "1,2,3"
+    window_days: int = 30,
+    strategy: str = "multi_source",
+    db: Session = Depends(get_db),
+) -> RecommendReelsResponse:
+    """
+    Đề xuất reels cho user_id.
+    """
+    if k < 1:
+        raise HTTPException(status_code=400, detail="k must be >= 1")
+    k = min(k, 500)
+    if window_days < 1 or window_days > 365:
+        raise HTTPException(status_code=400, detail="window_days must be in [1, 365]")
+    if strategy not in ("multi_source", "social_only", "cf_only", "trending_only"):
+        raise HTTPException(
+            status_code=400,
+            detail='strategy must be one of: "multi_source", "social_only", "cf_only", "trending_only"',
+        )
+    
+    from app.services.time_utils import utcnow
+    
+    exclude_set = None
+    if exclude_ids:
+        try:
+            exclude_set = {int(i.strip()) for i in exclude_ids.split(",") if i.strip()}
+        except ValueError:
+            raise HTTPException(status_code=400, detail="exclude_ids must be a comma-separated list of integers")
+
+    candidates = generate_reel_candidates(
+        db,
+        user_id=user_id,
+        exclude_reel_ids=exclude_set,
+        k=k,
+        window_days=window_days,
+        strategy=strategy,
+    )
+    
+    return RecommendReelsResponse(
+        user_id=user_id,
+        window_days=window_days,
+        candidates=[
+            ReelScore(
+                reel_id=c.reel_id,
+                score=c.score,
+                reason=c.reason,
+                source=c.source,
+            )
+            for c in candidates
+        ],
+        strategy=strategy,
+        generated_at=utcnow(),
     )

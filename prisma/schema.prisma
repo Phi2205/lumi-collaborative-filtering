@@ -1,0 +1,314 @@
+  generator client {
+    provider        = "prisma-client-js"
+    previewFeatures = ["fullTextSearch", "extendedIndexes"]
+  }
+
+  datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+  }
+
+  model conversations {
+    id                        BigInt                      @id @default(autoincrement())
+    created_at                DateTime?                   @default(now()) @db.Timestamp(6)
+    type                      ConversationType            @default(private)
+    avatar                    String?
+    created_by                BigInt?
+    name                      String?
+    updated_at                DateTime?                   @updatedAt @db.Timestamp(6)
+    last_message              String?
+    last_sender_id            BigInt?
+    last_message_at           DateTime?                   @db.Timestamp(6)
+    last_message_id           BigInt?
+    conversation_participants conversation_participants[]
+    messages                  messages[]
+
+    @@index([updated_at(sort: Desc)])
+    @@index([last_message_at(sort: Desc)])
+  }
+
+  model conversation_participants {
+    id                   BigInt           @id @default(autoincrement())
+    conversation_id      BigInt
+    user_id              BigInt
+    joined_at            DateTime?        @default(now()) @db.Timestamp(6)
+    role                 ConversationRole @default(member)
+    unread_count         Int              @default(0)
+    last_seen_message_id BigInt?
+    conversation         conversations    @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+    users                users            @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+    @@unique([conversation_id, user_id])
+    @@index([conversation_id])
+    @@index([user_id])
+  }
+
+  model follows {
+    follower_id                       BigInt
+    following_id                      BigInt
+    created_at                        DateTime? @default(now()) @db.Timestamp(6)
+    users_follows_follower_idTousers  users     @relation("follows_follower_idTousers", fields: [follower_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+    users_follows_following_idTousers users     @relation("follows_following_idTousers", fields: [following_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+    @@id([follower_id, following_id])
+  }
+
+  model messages {
+    id                  BigInt                @id @default(autoincrement())
+    conversation_id     BigInt
+    sender_id           BigInt
+    content             String?
+    created_at          DateTime?             @default(now()) @db.Timestamp(6)
+    type                MessageType           @default(text)
+    message_attachments message_attachments[]
+    conversation        conversations         @relation(fields: [conversation_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+    users               users                 @relation(fields: [sender_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+    @@index([conversation_id, created_at(sort: Desc)], map: "idx_messages_conv_created")
+  }
+
+  model message_attachments {
+    id         BigInt   @id @default(autoincrement())
+    message_id BigInt
+    url        String
+    file_type  String
+    width      Int?
+    height     Int?
+    file_size  Int?
+    created_at DateTime @default(now()) @db.Timestamp(6)
+    messages   messages @relation(fields: [message_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+    @@index([message_id], map: "idx_message_attachments_message")
+  }
+
+  model post_likes {
+    post_id    BigInt
+    user_id    BigInt
+    created_at DateTime? @default(now()) @db.Timestamp(6)
+    posts      posts     @relation(fields: [post_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+    users      users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+    @@id([post_id, user_id])
+  }
+
+  model posts {
+    id               BigInt          @id @default(autoincrement())
+    user_id          BigInt
+    content          String?
+    created_at       DateTime?       @default(now()) @db.Timestamp(6)
+    like_count       Int             @default(0)
+    comment_count    Int             @default(0)
+    share_count      Int             @default(0)
+    original_post_id BigInt?
+    post_comments    post_comments[]
+    post_likes       post_likes[]
+    post_media       post_media[]
+    original_post    posts?          @relation("PostShares", fields: [original_post_id], references: [id], onUpdate: NoAction)
+    shared_posts     posts[]         @relation("PostShares")
+    users            users           @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+    @@index([created_at(sort: Desc)], map: "idx_posts_created_at")
+    @@index([user_id], map: "idx_posts_user")
+    @@index([original_post_id], map: "idx_posts_original_post")
+  }
+
+  model post_media {
+    id         BigInt    @id @default(autoincrement())
+    post_id    BigInt
+    media_url  String
+    media_type String    @db.VarChar(10)
+    order      Int       @default(0)
+    created_at DateTime? @default(now()) @db.Timestamp(6)
+    posts      posts     @relation(fields: [post_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+    @@index([post_id], map: "idx_post_media_post")
+    @@index([post_id, order], map: "idx_post_media_order")
+    @@map("post_media")
+  }
+
+  model stories {
+    id          BigInt        @id @default(autoincrement())
+    user_id     BigInt
+    media_url   String
+    media_type  String?       @db.VarChar(10)
+    expires_at  DateTime      @db.Timestamp(6)
+    created_at  DateTime?     @default(now()) @db.Timestamp(6)
+    users       users         @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+    story_views story_views[]
+
+    @@index([expires_at], map: "idx_stories_expires")
+    @@index([user_id], map: "idx_stories_user")
+  }
+
+  model story_views {
+    story_id  BigInt
+    user_id   BigInt
+    viewed_at DateTime? @default(now()) @db.Timestamp(6)
+    stories   stories   @relation(fields: [story_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+    users     users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+    @@id([story_id, user_id])
+  }
+
+  model friend_requests {
+    requester_id BigInt
+    receiver_id  BigInt
+    status       FriendRequestStatus @default(pending)
+    created_at   DateTime?           @default(now()) @db.Timestamp(6)
+    responded_at DateTime?           @db.Timestamp(6)
+    receiver     users               @relation("friend_requests_receiver", fields: [receiver_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+    requester    users               @relation("friend_requests_requester", fields: [requester_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+    @@id([requester_id, receiver_id])
+    @@map("friend_requests")
+  }
+
+  model friends {
+    user_id    BigInt
+    friend_id  BigInt
+    created_at DateTime? @default(now()) @db.Timestamp(6)
+    friend     users     @relation("friends_friend", fields: [friend_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+    user       users     @relation("friends_user", fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+    @@id([user_id, friend_id])
+    @@map("friends")
+  }
+
+  model post_comments {
+    id             BigInt          @id @default(autoincrement())
+    post_id        BigInt
+    user_id        BigInt
+    content        String
+    parent_id      BigInt?
+    depth          Int             @default(0)
+    created_at     DateTime?       @default(now()) @db.Timestamp(6)
+    parent_comment post_comments?  @relation("CommentReplies", fields: [parent_id], references: [id], onDelete: Cascade)
+    replies        post_comments[] @relation("CommentReplies")
+    posts          posts           @relation(fields: [post_id], references: [id], onDelete: Cascade)
+    users          users           @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+    @@index([post_id, created_at(sort: Desc)], map: "idx_post_created")
+    @@index([parent_id], map: "idx_parent_id")
+    @@map("post_comments")
+  }
+
+  model users {
+    id                                  BigInt                      @id @default(autoincrement())
+    username                            String                      @unique @db.VarChar(50)
+    email                               String                      @unique @db.VarChar(100)
+    password_hash                       String
+    role                                UserRole                    @default(user)
+    avatar_url                          String?
+    bio                                 String?
+    birthday                            DateTime?                   @db.Date
+    created_at                          DateTime?                   @default(now()) @db.Timestamp(6)
+    name                                String                      @db.VarChar(100)
+    user_location                       user_locations?
+    conversation_participants           conversation_participants[]
+    follows_follows_follower_idTousers  follows[]                   @relation("follows_follower_idTousers")
+    follows_follows_following_idTousers follows[]                   @relation("follows_following_idTousers")
+    friend_requests_receiver            friend_requests[]           @relation("friend_requests_receiver")
+    friend_requests_requester           friend_requests[]           @relation("friend_requests_requester")
+    friends_friend                      friends[]                   @relation("friends_friend")
+    friends_user                        friends[]                   @relation("friends_user")
+    messages                            messages[]
+    post_comments                       post_comments[]
+    post_likes                          post_likes[]
+    posts                               posts[]
+    stories                             stories[]
+    story_views                         story_views[]
+    reels                               reels[]
+    reel_likes                          reel_likes[]
+    reel_comments                       reel_comments[]
+  }
+
+  model user_locations {
+    id         BigInt    @id @default(autoincrement())
+    user_id    BigInt    @unique
+    lat        Float?
+    lng        Float?
+    place_name String?   @db.VarChar(255)
+    address    String?   @db.Text
+    place_id   String?   @db.VarChar(100)
+    updated_at DateTime? @updatedAt @db.Timestamp(6)
+    user       users     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  }
+
+  enum ConversationType {
+    private
+    group
+  }
+
+  enum ConversationRole {
+    owner
+    admin
+    member
+  }
+
+  enum MessageType {
+    text
+    image
+    video
+  }
+
+  enum FriendRequestStatus {
+    pending
+    accepted
+    rejected
+  }
+
+  enum UserRole {
+    user
+    admin
+  }
+
+  model reels {
+    id            BigInt    @id @default(autoincrement())
+    user_id       BigInt
+    video_url     String    @db.Text
+    public_id     String    @db.VarChar(255)
+    thumbnail_url String?   @db.Text
+    thumbnail_id  String?   @db.VarChar(255)
+    caption       String?   @db.Text
+    music_name    String?   @db.VarChar(255)
+    duration      Int?
+    like_count    Int       @default(0)
+    comment_count Int       @default(0)
+    share_count   Int       @default(0)
+    view_count    Int       @default(0)
+    created_at    DateTime? @default(now()) @db.Timestamp(6)
+    updated_at    DateTime? @updatedAt @db.Timestamp(6)
+    user          users           @relation(fields: [user_id], references: [id], onDelete: Cascade)
+    reel_likes    reel_likes[]
+    reel_comments reel_comments[]
+
+    @@index([user_id])
+    @@index([created_at(sort: Desc)])
+  }
+
+  model reel_likes {
+    reel_id    BigInt
+    user_id    BigInt
+    created_at DateTime? @default(now()) @db.Timestamp(6)
+    reel       reels     @relation(fields: [reel_id], references: [id], onDelete: Cascade)
+    user       users     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+    @@id([reel_id, user_id])
+  }
+
+  model reel_comments {
+    id             BigInt          @id @default(autoincrement())
+    reel_id        BigInt
+    user_id        BigInt
+    content        String          @db.Text
+    parent_id      BigInt?
+    depth          Int             @default(0)
+    created_at     DateTime?       @default(now()) @db.Timestamp(6)
+    parent_comment reel_comments?  @relation("ReelCommentReplies", fields: [parent_id], references: [id], onDelete: Cascade)
+    replies        reel_comments[] @relation("ReelCommentReplies")
+    reel           reels           @relation(fields: [reel_id], references: [id], onDelete: Cascade)
+    user           users           @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+    @@index([reel_id, created_at(sort: Desc)])
+    @@index([parent_id])
+  }

@@ -1,6 +1,6 @@
 ## Hệ thống Collaborative Filtering (CF) cho Lumi (user-to-user)
 
-Tài liệu này mô tả các bước end-to-end để xây hệ gợi ý **user-to-user** dựa trên tương tác (like/comment/share/message/view…).
+Tài liệu này mô tả các bước end-to-end để xây hệ gợi ý **user-to-user** dựa trên tương tác (like_post/comment_post/share_post/message/view_post…).
 
 ### Combo khuyến nghị (để không “phình data” nhưng vẫn hiệu quả)
 
@@ -24,16 +24,16 @@ Tài liệu này mô tả các bước end-to-end để xây hệ gợi ý **use
   - self-interaction
   - bot/spam (rule hoặc model)
 - Giảm tải logging (khuyến nghị):
-  - với `view`: dedup theo session hoặc sampling (1/N), và đặt TTL ngắn hơn các event khác
+  - với `view_post`: dedup theo session hoặc sampling (1/N), và đặt TTL ngắn hơn các event khác
 
 ### 2) Mapping event → điểm (implicit weights)
 
 - Ví dụ baseline (tuỳ chỉnh):
   - `message`: 2.0
-  - `comment`: 2.0
-  - `share`: 1.5
-  - `like`: 1.0
-  - `view`: 0.1
+  - `comment_post`: 2.0
+  - `share_post`: 1.5
+  - `like_post`: 1.0
+  - `view_post`: 0.1
 - Chống “message dominance”:
   - bucket theo ngày + cap + log-scale:
     - `m = min(message_count_per_day, 20)`
@@ -119,12 +119,12 @@ Baseline:
 
 1) **Ingest events**
    - app ghi events (DB/stream)
-   - áp dụng rule giảm tải cho `view` (dedup/sampling)
+   - áp dụng rule giảm tải cho `view_post` (dedup/sampling)
 
 2) **ETL daily aggregate**
    - gom theo (actor, target, day):
      - counts theo event type
-     - áp dụng cap/day (vd message<=20/day, view<=50/day)
+     - áp dụng cap/day (vd message<=20/day, view_post<=50/day)
      - tính điểm theo `w * log(1+count_day)` và (tuỳ chọn) time-decay theo ngày
 
 3) **Build graph edges (Top-K)**
