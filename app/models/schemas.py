@@ -44,3 +44,33 @@ class RecommendUsersResponse(BaseModel):
     recommendations: list[UserScore]
     strategy: str = "neighbors_2hop_weighted"
     generated_at: datetime
+
+
+class PostScore(BaseModel):
+    post_id: int
+    score: float
+    reason: Optional[str] = None
+    source: Optional[str] = None  # "social", "cf", "trending", etc.
+
+
+class RecommendPostsResponse(BaseModel):
+    user_id: int
+    window_days: int
+    candidates: list[PostScore]
+    strategy: str = "multi_source"
+    generated_at: datetime
+
+
+class ReelScore(BaseModel):
+    reel_id: int
+    score: float
+    reason: Optional[str] = None
+    source: Optional[str] = None
+
+
+class RecommendReelsResponse(BaseModel):
+    user_id: int
+    window_days: int
+    candidates: list[ReelScore]
+    strategy: str = "multi_source"
+    generated_at: datetime

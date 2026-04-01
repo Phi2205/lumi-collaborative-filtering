@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import distinct, func, select
 from sqlalchemy.orm import Session
 
-from app.models.models import UserInteractionEvent
+from app.models.models import Friend, UserInteractionEvent
 from app.services.scoring import event_score_from_count
 from app.services.time_utils import days_ago, half_life_decay, utcnow
 
@@ -26,7 +26,8 @@ def get_similar_users_shared_targets(
     window_days: int,
 ) -> tuple[list[UserScoreRow], datetime]:
     cutoff = utcnow() - timedelta(days=window_days)
-
+    print("cutoff", cutoff)
+    print("user_id", user_id, type(user_id))
     user_targets_sq = (
         select(distinct(UserInteractionEvent.target_user_id).label("target_user_id"))
         .where(
@@ -52,10 +53,12 @@ def get_similar_users_shared_targets(
     )
 
     rows = db.execute(q).all()
+    print("rows", rows)
     neighbors = [
         UserScoreRow(user_id=int(r.other_user_id), score=float(r.shared_targets), reason="shared_targets")
         for r in rows
     ]
+    print("neighbors", neighbors)   
     return neighbors, utcnow()
 
 
@@ -87,6 +90,16 @@ def recommend_users_neighbors_2hop_weighted(
     neighbor_ids = list(neighbor_scores.keys())
     if not neighbor_ids:
         return [], generated_at
+
+    # Loại bỏ những người đã là bạn bè (kiểm tra cả 2 chiều)
+    from sqlalchemy import or_
+    friends_q = select(Friend.friend_id).where(Friend.user_id == user_id)
+    friends_reverse_q = select(Friend.user_id).where(Friend.friend_id == user_id)
+    
+    already_friends = {int(r[0]) for r in db.execute(friends_q).all()}
+    already_friends.update({int(r[0]) for r in db.execute(friends_reverse_q).all()})
+    
+    seen_targets.update(already_friends)
 
     # Với mỗi (actor, target, event_type) của neighbors trong window:
     # - lấy tổng count

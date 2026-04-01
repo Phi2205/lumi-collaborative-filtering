@@ -36,7 +36,6 @@ def ingest_event(
     if occurred_at.tzinfo is None:
         occurred_at = occurred_at.replace(tzinfo=timezone.utc)
     occurred_at = occurred_at.astimezone(timezone.utc)
-
     row = UserInteractionEvent(
         actor_user_id=actor_user_id,
         target_user_id=target_user_id,
