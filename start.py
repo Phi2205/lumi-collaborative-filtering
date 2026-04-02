@@ -174,7 +174,7 @@ def main() -> None:
     try:
         # Lấy port từ biến môi trường (Render cấp port ngẫu nhiên qua $PORT)
         port = int(os.getenv("PORT", 8000))
-        is_render = os.getenv("RENDER", "false").lower() == "true"
+        is_render = os.getenv("PORT") is not None
         
         uvicorn.run(
             "app.utils.main:app",
