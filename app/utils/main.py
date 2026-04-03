@@ -33,29 +33,35 @@ async def refresh_features_background_job() -> None:
 
 
 async def self_ping_keep_alive() -> None:
-    """Task tự ping chính nó qua URL công khai để Render không cho 'đi ngủ' (cho gói Free)."""
+    """Task tự ping chính nó để Render không 'đi ngủ' (cho gói Miễn phí)."""
     import os
     import urllib.request
+    import asyncio
     
-    # Lấy URL từ biến môi trường (Render hoặc tự set trong .env)
+    # Lấy URL công khai của bạn
     url = os.getenv("RENDER_EXTERNAL_URL")
     if not url:
         print("💡 [Self-Ping] Bỏ qua vì RENDER_EXTERNAL_URL chưa được cấu hình.")
         return
     
     health_url = f"{url.rstrip('/')}/health"
-    print(f"💓 [Self-Ping] Khởi động Keep-Alive ping đến: {health_url}")
+    print(f"💓 [Self-Ping] Bắt đầu Keep-Alive cho: {health_url}")
     
     while True:
-        # Chờ 10 phút (vẫn nhỏ hơn 15 phút giới hạn của Render)
-        await asyncio.sleep(600)
         try:
-            # Gửi request GET đơn giản
-            with urllib.request.urlopen(health_url, timeout=10) as response:
-                if response.getcode() == 200:
-                    print(f"💓 [Self-Ping] Sent success heartbeat to {health_url}")
+            # Gửi request trong một thread riêng để không làm treo server (non-blocking)
+            def send_ping():
+                with urllib.request.urlopen(health_url, timeout=15) as resp:
+                    return resp.getcode()
+            
+            code = await asyncio.to_thread(send_ping)
+            if code == 200:
+                print(f"💓 [Self-Ping] Heartbeat thành công đến {health_url}")
         except Exception as e:
-            print(f"⚠️ [Self-Ping] Lỗi khi ping: {e}")
+            print(f"⚠️ [Self-Ping] Lỗi ping: {e}")
+            
+        # Quay lại ngủ 5 phút (300s) - ngắn hơn để chắc chắn Render không scale-down
+        await asyncio.sleep(300)
 
 
 @app.on_event("startup")
