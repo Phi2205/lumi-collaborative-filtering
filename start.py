@@ -176,11 +176,15 @@ def main() -> None:
         port = int(os.getenv("PORT", 8000))
         is_render = os.getenv("PORT") is not None
         
+        # Log reload mode
+        reload_enabled = not is_render
+        print(f"🔄 Reload mode: {'ENABLED' if reload_enabled else 'DISABLED'} (is_render={is_render})")
+        
         uvicorn.run(
             "app.utils.main:app",
             host="0.0.0.0",
             port=port,
-            reload=not is_render,  # Chỉ bật reload khi chạy local
+            reload=reload_enabled,  # Chỉ bật reload khi chạy local
             log_level="info",
             access_log=True,
         )
