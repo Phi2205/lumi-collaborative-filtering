@@ -11,7 +11,7 @@ from typing import Optional, Set
 from sqlalchemy import distinct, func, select
 from sqlalchemy.orm import Session
 
-from app.models.models import Friend, Post, UserInteractionEvent, UserPostEngagement
+from app.models.models import Friend, Post, UserInteractionEvent, UserPostEngagement, PostView
 from app.services.time_utils import days_ago, half_life_decay, utcnow
 
 
@@ -445,6 +445,11 @@ def generate_post_candidates(
     all_candidates: list[PostScoreRow] = []
     # Khởi tạo seen_post_ids từ tham số loại trừ
     seen_post_ids: Set[int] = set(exclude_post_ids) if exclude_post_ids else set()
+    
+    # Lấy danh sách posts đã xem từ bảng post_views
+    viewed_posts_q = select(PostView.post_id).where(PostView.user_id == user_id)
+    viewed_post_ids = {int(r[0]) for r in db.execute(viewed_posts_q).all()}
+    seen_post_ids.update(viewed_post_ids)
     
     if strategy in ("multi_source", "social_only"):
         # Nguồn 1: Social graph (30% của k)
