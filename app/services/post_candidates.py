@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Optional, Set
 
-from sqlalchemy import distinct, func, select
+from sqlalchemy import distinct, exists, func, select
 from sqlalchemy.orm import Session
 
 from app.models.models import Friend, Post, UserInteractionEvent, UserPostEngagement, PostView
@@ -212,6 +212,7 @@ def get_cf_posts(
 def get_trending_posts(
     db: Session,
     *,
+    user_id: Optional[int] = None,  # Thêm user_id để lọc bài đã xem
     exclude_post_ids: Optional[Set[int]] = None,
     k: int = 50,
     window_days: int = 7,
@@ -239,7 +240,19 @@ def get_trending_posts(
         .where(
             UserPostEngagement.last_interaction_at >= cutoff if cutoff else True,
         )
-        .group_by(UserPostEngagement.post_id)
+    )
+
+    # Lọc bài đã xem từ bảng post_views
+    if user_id:
+        q = q.where(
+            ~exists().where(
+                (PostView.post_id == UserPostEngagement.post_id) &
+                (PostView.user_id == user_id)
+            )
+        )
+
+    q = (
+        q.group_by(UserPostEngagement.post_id)
         .having(func.sum(UserPostEngagement.engagement_score) >= min_engagement)
         .order_by(func.sum(UserPostEngagement.engagement_score).desc())
         .limit(k * 2)
@@ -483,6 +496,7 @@ def generate_post_candidates(
         # Nguồn 3: Trending (20% của k)
         trending_posts = get_trending_posts(
             db,
+            user_id=user_id,
             exclude_post_ids=seen_post_ids,
             k=int(k * 0.2),
             window_days=min(window_days, 7),
